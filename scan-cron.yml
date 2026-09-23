@@ -1,0 +1,14 @@
+name: Trigger halal scanner scan
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes — free on GitHub Actions, even for private repos
+  workflow_dispatch: {}       # lets you also trigger it manually from the Actions tab
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the Vercel scan endpoint
+        run: |
+          curl -sf -X POST "https://${{ secrets.VERCEL_APP_DOMAIN }}/api/scan?secret=${{ secrets.SCAN_SECRET }}"

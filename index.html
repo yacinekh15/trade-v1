@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Halal Crypto Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel: #10151d;
+    --panel-border: #1d2530;
+    --text: #dbe2ea;
+    --text-dim: #6b7684;
+    --breakout: #35c9a5;
+    --momentum: #7c8cf5;
+    --trend: #4fa3e3;
+    --watch: #e0a84d;
+    --none: #3d4550;
+    --red: #e0654d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: #fff;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--breakout);
+    display: inline-block;
+    margin-right: 6px;
+    box-shadow: 0 0 6px var(--breakout);
+  }
+  .dot.off { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .controls {
+    display: flex;
+    gap: 6px;
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .tf-btn, .filter-btn {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    padding: 6px 14px;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .tf-btn.active, .filter-btn.active {
+    border-color: var(--breakout);
+    color: var(--breakout);
+  }
+  .filters { margin-left: auto; display: flex; gap: 6px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 500;
+    padding: 10px 28px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  tbody tr {
+    border-bottom: 1px solid #141a22;
+    cursor: pointer;
+  }
+  tbody tr:hover { background: #0d1219; }
+  tbody td { padding: 11px 28px; }
+  .sym { color: #fff; font-weight: 500; }
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.BREAKOUT { background: rgba(53,201,165,0.15); color: var(--breakout); }
+  .badge.MOMENTUM { background: rgba(124,140,245,0.15); color: var(--momentum); }
+  .badge.TREND    { background: rgba(79,163,227,0.15); color: var(--trend); }
+  .badge.WATCH    { background: rgba(224,168,77,0.15); color: var(--watch); }
+  .badge.NOSETUP  { background: rgba(61,69,80,0.25); color: var(--text-dim); }
+
+  .score-bar-bg {
+    width: 70px; height: 5px; background: #1a212c; border-radius: 3px; overflow: hidden;
+    display: inline-block; vertical-align: middle; margin-right: 8px;
+  }
+  .score-bar-fill { height: 100%; border-radius: 3px; }
+
+  .reasons {
+    display: none;
+    padding: 4px 28px 16px 28px;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.9;
+  }
+  tr.expanded .reasons { display: block; }
+  .empty { padding: 60px; text-align: center; color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>HALAL CRYPTO SCANNER</h1>
+  <div class="status">
+    <span id="conn"><span class="dot"></span>LIVE</span>
+    <span id="updated">—</span>
+  </div>
+</header>
+
+<div class="controls">
+  <button class="tf-btn" data-tf="5m">5m</button>
+  <button class="tf-btn" data-tf="15m">15m</button>
+  <button class="tf-btn active" data-tf="1h">1h</button>
+  <button class="tf-btn" data-tf="4h">4h</button>
+  <div class="filters">
+    <button class="filter-btn active" data-f="ALL">All</button>
+    <button class="filter-btn" data-f="BREAKOUT">Breakout</button>
+    <button class="filter-btn" data-f="MOMENTUM">Momentum</button>
+    <button class="filter-btn" data-f="TREND">Trend</button>
+    <button class="filter-btn" data-f="WATCH">Watch</button>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Coin</th><th>Price</th><th>Setup</th><th>Score</th><th>RSI</th><th>Vol</th>
+    </tr>
+  </thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="empty" id="empty" style="display:none">No results yet — waiting for the first scan…</div>
+
+<script>
+let currentTimeframe = '1h';
+let currentFilter = 'ALL';
+let latestResults = [];
+
+function scoreColor(score) {
+  if (score >= 70) return 'var(--breakout)';
+  if (score >= 40) return 'var(--watch)';
+  return 'var(--none)';
+}
+
+function render() {
+  const tbody = document.getElementById('rows');
+  const empty = document.getElementById('empty');
+  const filtered = currentFilter === 'ALL'
+    ? latestResults
+    : latestResults.filter(r => r.setup_type === currentFilter);
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map((r, i) => {
+    const badgeClass = r.setup_type.replace(' ', '');
+    const color = scoreColor(r.score);
+    return `
+      <tr data-idx="${i}">
+        <td class="sym">${r.symbol}</td>
+        <td>${r.price < 1 ? r.price.toFixed(5) : r.price.toFixed(2)}</td>
+        <td><span class="badge ${badgeClass}">${r.setup_type}</span></td>
+        <td>
+          <span class="score-bar-bg"><span class="score-bar-fill" style="width:${r.score}%; background:${color}"></span></span>
+          ${r.score}
+        </td>
+        <td>${r.indicators.rsi ?? '—'}</td>
+        <td>${r.indicators.volume_ratio ? r.indicators.volume_ratio + 'x' : '—'}</td>
+      </tr>
+      <tr class="reasons-row"><td colspan="6" class="reasons">${r.reasons.map(x => '✓ ' + x).join('<br>')}</td></tr>
+    `;
+  }).join('');
+
+  document.querySelectorAll('tbody tr[data-idx]').forEach(row => {
+    row.addEventListener('click', () => {
+      const next = row.nextElementSibling;
+      next.style.display = next.style.display === 'block' ? 'none' : 'block';
+    });
+  });
+}
+
+function applyUpdate(payload) {
+  latestResults = payload.results;
+  document.getElementById('updated').textContent =
+    'Updated ' + new Date(payload.updated_at * 1000).toLocaleTimeString();
+  render();
+}
+
+document.querySelectorAll('.tf-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTimeframe = btn.dataset.tf;
+    await fetch(`/api/timeframe?timeframe=${currentTimeframe}`, { method: 'POST' });
+    const res = await fetch(`/api/results?timeframe=${currentTimeframe}`);
+    applyUpdate(await res.json());
+  });
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.f;
+    render();
+  });
+});
+
+let pollTimer = null;
+
+function refresh() {
+  fetch(`/api/results?timeframe=${currentTimeframe}`)
+    .then(r => r.json())
+    .then(payload => {
+      if (payload.error) {
+        document.getElementById('conn').innerHTML = '<span class="dot off"></span>ERROR';
+        return;
+      }
+      document.getElementById('conn').innerHTML = '<span class="dot"></span>NEAR-LIVE';
+      applyUpdate(payload);
+    })
+    .catch(() => {
+      document.getElementById('conn').innerHTML = '<span class="dot off"></span>DISCONNECTED';
+    });
+}
+
+function startPolling() {
+  refresh();
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(refresh, 25000);  // 25s — plenty for a scan that itself runs every few minutes
+}
+
+startPolling();
+</script>
+
+</body>
+</html>
